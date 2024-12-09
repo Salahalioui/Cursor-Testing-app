@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
-import { initDB, getAllStudents, getStudentEvaluations } from '@/services/db'
+import { initDB, getAllStudents, getStudentEvaluations, getStudentById } from '@/services/db'
+import { exportToPDF as generatePDF, exportToExcel as generateExcel } from '@/services/exportService'
 import StudentProgressReport from './StudentProgressReport.vue'
 import TeamPerformanceReport from './TeamPerformanceReport.vue'
 
@@ -60,14 +61,110 @@ const gradeLevels = [
 ]
 
 // Export functions
-const exportToPDF = () => {
-  // TODO: Implement PDF export
-  console.log('Export to PDF')
+const exportToPDF = async () => {
+  try {
+    if (activeTab.value === 'student-progress' && selectedStudent.value) {
+      // Export student progress
+      const student = await getStudentById(selectedStudent.value)
+      const evaluations = await getStudentEvaluations(selectedStudent.value)
+      
+      generatePDF({
+        student,
+        evaluations: evaluations.filter(evaluation => 
+          (!selectedSport.value || evaluation.sportType === selectedSport.value)
+        )
+      }, 'student')
+    } else {
+      // Export team performance
+      const stats = await getTeamStats()
+      generatePDF({ stats }, 'team')
+    }
+  } catch (error) {
+    console.error('Export to PDF failed:', error)
+  }
 }
 
-const exportToExcel = () => {
-  // TODO: Implement Excel export
-  console.log('Export to Excel')
+const exportToExcel = async () => {
+  try {
+    if (activeTab.value === 'student-progress' && selectedStudent.value) {
+      // Export student progress
+      const student = await getStudentById(selectedStudent.value)
+      const evaluations = await getStudentEvaluations(selectedStudent.value)
+      
+      generateExcel({
+        student,
+        evaluations: evaluations.filter(evaluation => 
+          (!selectedSport.value || evaluation.sportType === selectedSport.value)
+        )
+      }, 'student')
+    } else {
+      // Export team performance
+      const stats = await getTeamStats()
+      generateExcel({ stats }, 'team')
+    }
+  } catch (error) {
+    console.error('Export to Excel failed:', error)
+  }
+}
+
+// Helper function to get team statistics
+const getTeamStats = async () => {
+  const allStudents = students.value.filter(student =>
+    (!selectedGradeLevel.value || student.grade === selectedGradeLevel.value) &&
+    (!selectedSport.value || student.activities.includes(selectedSport.value))
+  )
+
+  const allEvaluations = await Promise.all(
+    allStudents.map(student => getStudentEvaluations(student.id))
+  )
+
+  const flatEvaluations = allEvaluations
+    .flat()
+    .filter(evaluation => 
+      (!selectedSport.value || evaluation.sportType === selectedSport.value)
+    )
+
+  // Calculate statistics
+  const stats = {
+    totalStudents: allStudents.length,
+    totalEvaluations: flatEvaluations.length,
+    averageScore: 0,
+    categoryAverages: []
+  }
+
+  // Calculate category averages
+  const categories = {}
+  let totalScore = 0
+  let totalCriteria = 0
+
+  flatEvaluations.forEach(evaluation => {
+    Object.entries(evaluation.scores).forEach(([key, score]) => {
+      const category = key.split('-')[0]
+      if (!categories[category]) {
+        categories[category] = {
+          total: 0,
+          count: 0
+        }
+      }
+      categories[category].total += score
+      categories[category].count++
+      totalScore += score
+      totalCriteria++
+    })
+  })
+
+  // Calculate overall average
+  stats.averageScore = totalCriteria > 0 
+    ? Math.round((totalScore / totalCriteria) * 10) / 10 
+    : 0
+
+  // Calculate category averages
+  stats.categoryAverages = Object.entries(categories).map(([category, data]) => ({
+    category,
+    average: Math.round((data.total / data.count) * 10) / 10
+  })).sort((a, b) => b.average - a.average)
+
+  return stats
 }
 </script>
 
