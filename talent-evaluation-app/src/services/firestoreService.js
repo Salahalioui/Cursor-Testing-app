@@ -7,7 +7,10 @@ import {
   updateDoc,
   query,
   where,
-  serverTimestamp
+  serverTimestamp,
+  orderBy,
+  limit,
+  addDoc
 } from 'firebase/firestore'
 import { db } from './firebase'
 
@@ -15,6 +18,78 @@ import { db } from './firebase'
 const USERS_COLLECTION = 'users'
 const ROLES_COLLECTION = 'roles'
 const ASSIGNMENTS_COLLECTION = 'assignments'
+
+// Get all users (admin only)
+const getAllUsers = async () => {
+  try {
+    const usersRef = collection(db, 'users')
+    const snapshot = await getDocs(usersRef)
+    return snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }))
+  } catch (error) {
+    console.error('Error fetching users:', error)
+    throw error
+  }
+}
+
+// Get recent activities (admin only)
+const getRecentActivities = async (limit = 10) => {
+  try {
+    const activitiesRef = collection(db, 'activities')
+    const q = query(
+      activitiesRef,
+      orderBy('timestamp', 'desc'),
+      limit(limit)
+    )
+    const snapshot = await getDocs(q)
+    return snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }))
+  } catch (error) {
+    console.error('Error fetching activities:', error)
+    throw error
+  }
+}
+
+// Log activity
+const logActivity = async (type, description, userId) => {
+  try {
+    const activitiesRef = collection(db, 'activities')
+    await addDoc(activitiesRef, {
+      type,
+      description,
+      userId,
+      timestamp: new Date().toISOString()
+    })
+  } catch (error) {
+    console.error('Error logging activity:', error)
+    // Don't throw error to prevent disrupting the main flow
+  }
+}
+
+// Update the updateUserProfile function to log activities
+const updateUserProfile = async (userId, profileData) => {
+  try {
+    const userRef = doc(db, 'users', userId)
+    await updateDoc(userRef, {
+      ...profileData,
+      updatedAt: new Date().toISOString()
+    })
+    
+    // Log the activity
+    await logActivity(
+      'user_updated',
+      `User profile updated: ${profileData.name || userId}`,
+      userId
+    )
+  } catch (error) {
+    console.error('Error updating user profile:', error)
+    throw error
+  }
+}
 
 export const firestoreService = {
   // User Profile Management
@@ -167,5 +242,10 @@ export const firestoreService = {
       console.error(`Assignment validation failed: ${error.message}`)
       return false
     }
-  }
+  },
+
+  getAllUsers,
+  getRecentActivities,
+  logActivity,
+  updateUserProfile
 } 
