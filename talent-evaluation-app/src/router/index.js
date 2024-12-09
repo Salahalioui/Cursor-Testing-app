@@ -69,6 +69,10 @@ function requireNoAuth(to, from, next) {
 
 const routes = [
   {
+    path: '/',
+    redirect: '/auth/login'
+  },
+  {
     path: '/auth',
     component: AuthLayout,
     beforeEnter: requireNoAuth,
@@ -91,7 +95,7 @@ const routes = [
     ]
   },
   {
-    path: '/',
+    path: '/dashboard',
     component: DashboardLayout,
     beforeEnter: requireAuth,
     children: [
