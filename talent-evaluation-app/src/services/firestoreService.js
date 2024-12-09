@@ -18,104 +18,39 @@ import { db } from './firebase'
 const USERS_COLLECTION = 'users'
 const ROLES_COLLECTION = 'roles'
 const ASSIGNMENTS_COLLECTION = 'assignments'
-
-// Get all users (admin only)
-const getAllUsers = async () => {
-  try {
-    const usersRef = collection(db, 'users')
-    const snapshot = await getDocs(usersRef)
-    return snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }))
-  } catch (error) {
-    console.error('Error fetching users:', error)
-    throw error
-  }
-}
-
-// Get recent activities (admin only)
-const getRecentActivities = async (limit = 10) => {
-  try {
-    const activitiesRef = collection(db, 'activities')
-    const q = query(
-      activitiesRef,
-      orderBy('timestamp', 'desc'),
-      limit(limit)
-    )
-    const snapshot = await getDocs(q)
-    return snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }))
-  } catch (error) {
-    console.error('Error fetching activities:', error)
-    throw error
-  }
-}
-
-// Log activity
-const logActivity = async (type, description, userId) => {
-  try {
-    const activitiesRef = collection(db, 'activities')
-    await addDoc(activitiesRef, {
-      type,
-      description,
-      userId,
-      timestamp: new Date().toISOString()
-    })
-  } catch (error) {
-    console.error('Error logging activity:', error)
-    // Don't throw error to prevent disrupting the main flow
-  }
-}
-
-// Update the updateUserProfile function to log activities
-const updateUserProfile = async (userId, profileData) => {
-  try {
-    const userRef = doc(db, 'users', userId)
-    await updateDoc(userRef, {
-      ...profileData,
-      updatedAt: new Date().toISOString()
-    })
-    
-    // Log the activity
-    await logActivity(
-      'user_updated',
-      `User profile updated: ${profileData.name || userId}`,
-      userId
-    )
-  } catch (error) {
-    console.error('Error updating user profile:', error)
-    throw error
-  }
-}
+const ACTIVITIES_COLLECTION = 'activities'
 
 export const firestoreService = {
   // User Profile Management
   async createUserProfile(uid, userData) {
     try {
       const userRef = doc(db, USERS_COLLECTION, uid)
-      await setDoc(userRef, {
-        ...userData,
+      const defaultData = {
+        role: 'TEACHER', // Default role
+        status: 'pending', // New users start as pending
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-        status: 'active'
-      })
-    } catch (error) {
-      throw new Error(`Failed to create user profile: ${error.message}`)
-    }
-  },
+        displayName: userData.displayName || '',
+        email: userData.email || '',
+        photoURL: userData.photoURL || '',
+        department: '',
+        bio: '',
+        phone: '',
+        alternativeEmail: ''
+      }
 
-  async updateUserProfile(uid, userData) {
-    try {
-      const userRef = doc(db, USERS_COLLECTION, uid)
-      await updateDoc(userRef, {
-        ...userData,
-        updatedAt: serverTimestamp()
+      await setDoc(userRef, {
+        ...defaultData,
+        ...userData
       })
+
+      // Log activity
+      await this.logActivity('user_created', `New user registered: ${userData.email}`, uid)
+      
+      return defaultData
     } catch (error) {
-      throw new Error(`Failed to update user profile: ${error.message}`)
+      console.error('Error creating user profile:', error)
+      throw new Error(`Failed to create user profile: ${error.message}`)
     }
   },
 
@@ -123,68 +58,111 @@ export const firestoreService = {
     try {
       const userRef = doc(db, USERS_COLLECTION, uid)
       const userSnap = await getDoc(userRef)
-      return userSnap.exists() ? userSnap.data() : null
+      if (!userSnap.exists()) {
+        return null
+      }
+      return {
+        id: userSnap.id,
+        ...userSnap.data()
+      }
     } catch (error) {
+      console.error('Error getting user profile:', error)
       throw new Error(`Failed to get user profile: ${error.message}`)
     }
   },
 
-  // Role Management
-  async assignRole(uid, role, assignments = {}) {
+  async updateUserProfile(uid, userData) {
     try {
       const userRef = doc(db, USERS_COLLECTION, uid)
-      await updateDoc(userRef, {
-        role,
-        assignments,
+      const updateData = {
+        ...userData,
         updatedAt: serverTimestamp()
-      })
-
-      // Create role-specific assignments
-      if (Object.keys(assignments).length > 0) {
-        const assignmentRef = doc(db, ASSIGNMENTS_COLLECTION, uid)
-        await setDoc(assignmentRef, {
-          userId: uid,
-          role,
-          ...assignments,
-          updatedAt: serverTimestamp()
-        })
       }
+      await updateDoc(userRef, updateData)
+
+      // Log activity
+      await this.logActivity(
+        'user_updated',
+        `User profile updated: ${userData.email || uid}`,
+        uid
+      )
+
+      return updateData
     } catch (error) {
-      throw new Error(`Failed to assign role: ${error.message}`)
+      console.error('Error updating user profile:', error)
+      throw new Error(`Failed to update user profile: ${error.message}`)
     }
   },
 
-  async getUsersByRole(role) {
+  // Activity Logging
+  async logActivity(type, description, userId) {
     try {
-      const q = query(collection(db, USERS_COLLECTION), where("role", "==", role))
-      const querySnapshot = await getDocs(q)
-      return querySnapshot.docs.map(doc => ({
+      const activitiesRef = collection(db, ACTIVITIES_COLLECTION)
+      await addDoc(activitiesRef, {
+        type,
+        description,
+        userId,
+        timestamp: serverTimestamp()
+      })
+    } catch (error) {
+      console.error('Error logging activity:', error)
+      // Don't throw error to prevent disrupting the main flow
+    }
+  },
+
+  // Get all users (admin only)
+  async getAllUsers() {
+    try {
+      const usersRef = collection(db, USERS_COLLECTION)
+      const snapshot = await getDocs(usersRef)
+      return snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }))
     } catch (error) {
-      throw new Error(`Failed to get users by role: ${error.message}`)
+      console.error('Error fetching users:', error)
+      throw new Error(`Failed to get all users: ${error.message}`)
     }
   },
 
-  // Assignment Management
-  async getTeacherAssignments(uid) {
+  // Get recent activities (admin only)
+  async getRecentActivities(limitCount = 10) {
     try {
-      const assignmentRef = doc(db, ASSIGNMENTS_COLLECTION, uid)
-      const assignmentSnap = await getDoc(assignmentRef)
-      return assignmentSnap.exists() ? assignmentSnap.data() : null
+      const activitiesRef = collection(db, ACTIVITIES_COLLECTION)
+      const q = query(
+        activitiesRef,
+        orderBy('timestamp', 'desc'),
+        limit(limitCount)
+      )
+      const snapshot = await getDocs(q)
+      return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
     } catch (error) {
-      throw new Error(`Failed to get teacher assignments: ${error.message}`)
+      console.error('Error fetching activities:', error)
+      throw new Error(`Failed to get recent activities: ${error.message}`)
     }
   },
 
-  async getCoachAssignments(uid) {
+  // Role Management
+  async assignRole(uid, role) {
     try {
-      const assignmentRef = doc(db, ASSIGNMENTS_COLLECTION, uid)
-      const assignmentSnap = await getDoc(assignmentRef)
-      return assignmentSnap.exists() ? assignmentSnap.data() : null
+      const userRef = doc(db, USERS_COLLECTION, uid)
+      await updateDoc(userRef, {
+        role,
+        updatedAt: serverTimestamp()
+      })
+
+      // Log activity
+      await this.logActivity(
+        'role_assigned',
+        `User role updated to ${role}`,
+        uid
+      )
     } catch (error) {
-      throw new Error(`Failed to get coach assignments: ${error.message}`)
+      console.error('Error assigning role:', error)
+      throw new Error(`Failed to assign role: ${error.message}`)
     }
   },
 
@@ -196,56 +174,16 @@ export const firestoreService = {
         status,
         updatedAt: serverTimestamp()
       })
+
+      // Log activity
+      await this.logActivity(
+        'status_updated',
+        `User status updated to ${status}`,
+        uid
+      )
     } catch (error) {
+      console.error('Error updating user status:', error)
       throw new Error(`Failed to update user status: ${error.message}`)
     }
-  },
-
-  // Bulk Operations
-  async getAllActiveUsers() {
-    try {
-      const q = query(collection(db, USERS_COLLECTION), where("status", "==", "active"))
-      const querySnapshot = await getDocs(q)
-      return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }))
-    } catch (error) {
-      throw new Error(`Failed to get active users: ${error.message}`)
-    }
-  },
-
-  // Role Validation
-  async validateUserRole(uid, requiredRole) {
-    try {
-      const userProfile = await this.getUserProfile(uid)
-      return userProfile?.role === requiredRole && userProfile?.status === 'active'
-    } catch (error) {
-      console.error(`Role validation failed: ${error.message}`)
-      return false
-    }
-  },
-
-  // Assignment Validation
-  async validateAssignment(uid, studentId) {
-    try {
-      const userProfile = await this.getUserProfile(uid)
-      if (!userProfile || userProfile.status !== 'active') return false
-
-      const assignments = await this.getTeacherAssignments(uid) || await this.getCoachAssignments(uid)
-      if (!assignments) return false
-
-      // Check if the student is in the user's assigned students/teams
-      return assignments.students?.includes(studentId) || 
-             assignments.teams?.some(team => team.students?.includes(studentId))
-    } catch (error) {
-      console.error(`Assignment validation failed: ${error.message}`)
-      return false
-    }
-  },
-
-  getAllUsers,
-  getRecentActivities,
-  logActivity,
-  updateUserProfile
+  }
 } 

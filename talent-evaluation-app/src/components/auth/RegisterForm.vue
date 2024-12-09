@@ -3,23 +3,21 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { authService } from '@/services/firebase'
 import { firestoreService } from '@/services/firestoreService'
-import { ROLES } from '@/services/userManagement'
 
 const router = useRouter()
+const name = ref('')
 const email = ref('')
 const password = ref('')
 const confirmPassword = ref('')
-const name = ref('')
-const role = ref('TEACHER') // Default role
 const loading = ref(false)
 const error = ref(null)
 
 const validateForm = () => {
+  if (!name.value) return 'Name is required'
   if (!email.value) return 'Email is required'
   if (!password.value) return 'Password is required'
-  if (password.value.length < 6) return 'Password must be at least 6 characters'
   if (password.value !== confirmPassword.value) return 'Passwords do not match'
-  if (!name.value) return 'Name is required'
+  if (password.value.length < 6) return 'Password must be at least 6 characters'
   if (!/\S+@\S+\.\S+/.test(email.value)) return 'Invalid email format'
   return null
 }
@@ -31,20 +29,18 @@ const handleRegister = async () => {
   loading.value = true
   try {
     // Create Firebase auth user
-    const user = await authService.register(email.value, password.value)
-
+    const userCredential = await authService.register(email.value, password.value)
+    
     // Create user profile in Firestore
-    await firestoreService.createUserProfile(user.uid, {
+    await firestoreService.createUserProfile(userCredential.user.uid, {
       email: email.value,
-      name: name.value,
-      role: role.value,
-      status: 'pending', // New users start as pending until approved by admin
-      createdAt: new Date().toISOString()
+      displayName: name.value,
+      role: 'TEACHER', // Default role
+      status: 'pending' // New users start as pending
     })
 
-    // Show success message and redirect to login
-    alert('Registration successful! Please verify your email and wait for admin approval.')
-    router.push('/auth/login')
+    // Redirect to pending approval page
+    router.push('/pending-approval')
   } catch (err) {
     error.value = err.message
   } finally {
@@ -67,7 +63,7 @@ const handleRegister = async () => {
             to="/auth/login" 
             class="font-medium text-blue-600 hover:text-blue-500"
           >
-            sign in to your existing account
+            sign in to your account
           </router-link>
         </p>
       </div>
@@ -90,24 +86,24 @@ const handleRegister = async () => {
           </div>
         </div>
 
-        <div class="rounded-md shadow-sm space-y-4">
+        <div class="rounded-md shadow-sm -space-y-px">
           <!-- Name Input -->
           <div>
-            <label for="name" class="block text-sm font-medium text-gray-700">Full Name</label>
+            <label for="name" class="sr-only">Full name</label>
             <input
               id="name"
               v-model="name"
               name="name"
               type="text"
               required
-              class="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-              placeholder="John Doe"
+              class="appearance-none rounded-t-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+              placeholder="Full name"
             >
           </div>
 
           <!-- Email Input -->
           <div>
-            <label for="email-address" class="block text-sm font-medium text-gray-700">Email address</label>
+            <label for="email-address" class="sr-only">Email address</label>
             <input
               id="email-address"
               v-model="email"
@@ -115,51 +111,39 @@ const handleRegister = async () => {
               type="email"
               autocomplete="email"
               required
-              class="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-              placeholder="john@example.com"
+              class="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+              placeholder="Email address"
             >
           </div>
 
           <!-- Password Input -->
           <div>
-            <label for="password" class="block text-sm font-medium text-gray-700">Password</label>
+            <label for="password" class="sr-only">Password</label>
             <input
               id="password"
               v-model="password"
               name="password"
               type="password"
+              autocomplete="new-password"
               required
-              class="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-              placeholder="••••••••"
+              class="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+              placeholder="Password"
             >
           </div>
 
           <!-- Confirm Password Input -->
           <div>
-            <label for="confirm-password" class="block text-sm font-medium text-gray-700">Confirm Password</label>
+            <label for="confirm-password" class="sr-only">Confirm password</label>
             <input
               id="confirm-password"
               v-model="confirmPassword"
               name="confirm-password"
               type="password"
+              autocomplete="new-password"
               required
-              class="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-              placeholder="••••••••"
+              class="appearance-none rounded-b-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+              placeholder="Confirm password"
             >
-          </div>
-
-          <!-- Role Selection -->
-          <div>
-            <label for="role" class="block text-sm font-medium text-gray-700">Role</label>
-            <select
-              id="role"
-              v-model="role"
-              name="role"
-              class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
-            >
-              <option value="TEACHER">Teacher</option>
-              <option value="COACH">Coach</option>
-            </select>
           </div>
         </div>
 
@@ -176,9 +160,10 @@ const handleRegister = async () => {
                 class="h-5 w-5 text-blue-500 group-hover:text-blue-400" 
                 xmlns="http://www.w3.org/2000/svg" 
                 viewBox="0 0 20 20" 
-                fill="currentColor"
+                fill="currentColor" 
+                aria-hidden="true"
               >
-                <path d="M8 9a3 3 0 100-6 3 3 0 000 6zM8 11a6 6 0 016 6H2a6 6 0 016-6zM16 7a1 1 0 10-2 0v1h-1a1 1 0 100 2h1v1a1 1 0 102 0v-1h1a1 1 0 100-2h-1V7z" />
+                <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" />
               </svg>
               <svg 
                 v-else

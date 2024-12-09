@@ -6,7 +6,10 @@ import {
   signOut,
   sendPasswordResetEmail,
   sendEmailVerification,
-  onAuthStateChanged
+  onAuthStateChanged,
+  browserLocalPersistence,
+  browserSessionPersistence,
+  setPersistence
 } from 'firebase/auth'
 import { getFirestore } from 'firebase/firestore'
 
@@ -41,12 +44,10 @@ export const authService = {
   // Sign in user
   async login(email, password, rememberMe = false) {
     try {
+      // Set persistence first
+      await setPersistence(auth, rememberMe ? browserLocalPersistence : browserSessionPersistence)
+      // Then sign in
       const userCredential = await signInWithEmailAndPassword(auth, email, password)
-      if (rememberMe) {
-        await auth.setPersistence('LOCAL')
-      } else {
-        await auth.setPersistence('SESSION')
-      }
       return userCredential.user
     } catch (error) {
       throw new Error(error.message)
