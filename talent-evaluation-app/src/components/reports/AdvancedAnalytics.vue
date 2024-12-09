@@ -68,7 +68,7 @@ const BENCHMARK_LEVELS = computed(() => ({
 // Add props for prediction settings
 const props = defineProps({
   studentId: {
-    type: String,
+    type: [String, Number],
     default: null
   },
   sportType: {
@@ -85,7 +85,10 @@ const props = defineProps({
   }
 })
 
-// State
+// Add emits for prop updates
+const emit = defineEmits(['update:predictionPeriod'])
+
+// Local state
 const loading = ref(true)
 const error = ref(null)
 const performanceData = ref(null)
@@ -95,6 +98,17 @@ const benchmarkStats = ref(null)
 const predictions = ref(null)
 const showPredictions = ref(true)
 const isEditingThresholds = ref(false)
+const localPredictionPeriod = ref(props.predictionPeriod)
+
+// Watch for local prediction period changes
+watch(localPredictionPeriod, (newValue) => {
+  emit('update:predictionPeriod', newValue)
+})
+
+// Watch for prop changes to update local state
+watch(() => props.predictionPeriod, (newValue) => {
+  localPredictionPeriod.value = newValue
+})
 
 // Function to reset thresholds to defaults
 const resetThresholds = () => {
@@ -571,7 +585,7 @@ const getBenchmarkLevel = (score) => {
               </label>
               <select
                 id="predictionPeriod"
-                v-model="props.predictionPeriod"
+                v-model="localPredictionPeriod"
                 class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
               >
                 <option value="3-months">Next 3 Months</option>

@@ -13,6 +13,7 @@ const selectedStudent = ref(null)
 const selectedSport = ref('')
 const selectedGradeLevel = ref('')
 const dateRange = ref('last-6-months')
+const predictionPeriod = ref('3-months')
 const loading = ref(false)
 const error = ref(null)
 
@@ -324,6 +325,7 @@ const getTeamStats = async () => {
             :student-id="selectedStudentId"
             :sport-type="selectedSport"
             :date-range="dateRange"
+            v-model:prediction-period="predictionPeriod"
           />
         </div>
       </div>
