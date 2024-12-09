@@ -4,6 +4,7 @@ import { initDB, getAllStudents, getStudentEvaluations, getStudentById } from '@
 import { exportToPDF as generatePDF, exportToExcel as generateExcel } from '@/services/exportService'
 import StudentProgressReport from './StudentProgressReport.vue'
 import TeamPerformanceReport from './TeamPerformanceReport.vue'
+import AdvancedAnalytics from './AdvancedAnalytics.vue'
 
 // State
 const activeTab = ref('student-progress')
@@ -289,6 +290,17 @@ const getTeamStats = async () => {
             >
               Team Performance
             </button>
+            <button
+              @click="activeTab = 'analytics'"
+              :class="[
+                'px-6 py-3 text-sm font-medium',
+                activeTab === 'analytics'
+                  ? 'border-b-2 border-blue-500 text-blue-600'
+                  : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              ]"
+            >
+              Advanced Analytics
+            </button>
           </nav>
         </div>
 
@@ -302,9 +314,15 @@ const getTeamStats = async () => {
             :date-range="dateRange"
           />
           <TeamPerformanceReport
-            v-else
+            v-else-if="activeTab === 'team-performance'"
             :sport-type="selectedSport"
             :grade-level="selectedGradeLevel"
+            :date-range="dateRange"
+          />
+          <AdvancedAnalytics
+            v-else-if="activeTab === 'analytics'"
+            :student-id="selectedStudentId"
+            :sport-type="selectedSport"
             :date-range="dateRange"
           />
         </div>
