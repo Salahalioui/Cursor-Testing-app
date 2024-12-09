@@ -376,6 +376,119 @@ watch([() => props.studentId, () => props.sportType, () => props.dateRange], () 
 onMounted(() => {
   loadAnalyticsData()
 })
+
+// Chart options
+const lineChartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: {
+      position: 'top'
+    },
+    title: {
+      display: true,
+      text: 'Performance Trends Over Time'
+    },
+    tooltip: {
+      callbacks: {
+        afterBody: (context) => {
+          if (!benchmarkStats.value) return ''
+          const value = context[0].parsed.y
+          const benchmark = getBenchmarkLevel(value)
+          return `\nPerformance Level: ${benchmark.label}`
+        }
+      }
+    }
+  },
+  scales: {
+    y: {
+      beginAtZero: true,
+      max: 10
+    }
+  }
+}
+
+const barChartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: {
+      position: 'top'
+    },
+    title: {
+      display: true,
+      text: 'Comparative Analysis'
+    },
+    tooltip: {
+      callbacks: {
+        afterBody: (context) => {
+          if (!benchmarkStats.value) return ''
+          const value = context[0].parsed.y
+          const benchmark = getBenchmarkLevel(value)
+          return `Performance Level: ${benchmark.label}`
+        }
+      }
+    }
+  },
+  scales: {
+    y: {
+      beginAtZero: true,
+      max: 10
+    }
+  }
+}
+
+const radarChartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: {
+      position: 'top'
+    },
+    title: {
+      display: true,
+      text: 'Skills Assessment'
+    }
+  },
+  scales: {
+    r: {
+      min: 0,
+      max: 10,
+      beginAtZero: true
+    }
+  }
+}
+
+// Helper function to calculate benchmarks
+const calculateBenchmarks = (evaluations) => {
+  if (!evaluations.length) return null
+
+  const scores = evaluations.map(evaluation => {
+    const values = Object.values(evaluation.scores)
+    return values.reduce((sum, score) => sum + score, 0) / values.length
+  })
+
+  const average = scores.reduce((sum, score) => sum + score, 0) / scores.length
+  const variance = scores.reduce((sum, score) => sum + Math.pow(score - average, 2), 0) / scores.length
+  const standardDev = Math.sqrt(variance)
+
+  return {
+    average,
+    standardDev,
+    min: Math.min(...scores),
+    max: Math.max(...scores)
+  }
+}
+
+// Helper function to determine benchmark level
+const getBenchmarkLevel = (score) => {
+  for (const [level, data] of Object.entries(BENCHMARK_LEVELS.value)) {
+    if (score >= data.threshold * 10) {
+      return data
+    }
+  }
+  return BENCHMARK_LEVELS.value.BELOW
+}
 </script>
 
 <template>
