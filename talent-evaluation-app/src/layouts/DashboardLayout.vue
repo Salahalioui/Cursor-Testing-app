@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { authService } from '@/services/firebase'
 import { firestoreService } from '@/services/firestoreService'
@@ -7,6 +7,7 @@ import { firestoreService } from '@/services/firestoreService'
 const router = useRouter()
 const userProfile = ref(null)
 const userMenuOpen = ref(false)
+const sidebarOpen = ref(false)
 
 // Load user profile
 const loadUserProfile = async () => {
@@ -23,7 +24,7 @@ const loadUserProfile = async () => {
 // Navigation items based on user role
 const navigation = computed(() => {
   const items = [
-    { name: 'Dashboard', path: '/', icon: '📊' }
+    { name: 'Dashboard', path: userProfile.value?.role === 'ADMIN' ? '/admin/dashboard' : '/dashboard', icon: '📊' }
   ]
 
   if (userProfile.value) {
@@ -35,20 +36,14 @@ const navigation = computed(() => {
     }
 
     items.push(
-      { name: 'Students', path: '/students', icon: '🎓' },
-      { name: 'Evaluations', path: '/evaluations', icon: '��' },
-      { name: 'Reports', path: '/reports', icon: '📈' }
+      { name: 'Students', path: '/dashboard/students', icon: '🎓' },
+      { name: 'Evaluations', path: '/dashboard/evaluations', icon: '📝' },
+      { name: 'Reports', path: '/dashboard/reports', icon: '📈' }
     )
   }
 
   return items
 })
-
-// User menu items
-const userMenuItems = [
-  { name: 'Your Profile', path: '/profile' },
-  { name: 'Settings', path: '/settings' }
-]
 
 // Handle logout
 const handleLogout = async () => {
@@ -61,7 +56,7 @@ const handleLogout = async () => {
 }
 
 // Load profile on mount
-loadUserProfile()
+onMounted(loadUserProfile)
 </script>
 
 <template>
@@ -105,7 +100,7 @@ loadUserProfile()
                   <span class="sr-only">Open user menu</span>
                   <div class="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center">
                     <span class="text-sm font-medium text-gray-600">
-                      {{ userProfile?.name?.[0]?.toUpperCase() || '?' }}
+                      {{ userProfile?.displayName?.[0]?.toUpperCase() || '?' }}
                     </span>
                   </div>
                 </button>
@@ -118,19 +113,17 @@ loadUserProfile()
                 role="menu"
               >
                 <div class="px-4 py-2 text-sm text-gray-700 border-b">
-                  <div class="font-medium">{{ userProfile?.name }}</div>
+                  <div class="font-medium">{{ userProfile?.displayName }}</div>
                   <div class="text-gray-500">{{ userProfile?.email }}</div>
                 </div>
 
                 <router-link
-                  v-for="item in userMenuItems"
-                  :key="item.path"
-                  :to="item.path"
+                  to="/dashboard/profile"
                   class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                   role="menuitem"
                   @click="userMenuOpen = false"
                 >
-                  {{ item.name }}
+                  Your Profile
                 </router-link>
 
                 <button
@@ -146,6 +139,27 @@ loadUserProfile()
         </div>
       </div>
     </nav>
+
+    <!-- Mobile menu -->
+    <div class="sm:hidden" v-if="sidebarOpen">
+      <div class="pt-2 pb-3 space-y-1">
+        <router-link
+          v-for="item in navigation"
+          :key="item.path"
+          :to="item.path"
+          class="block pl-3 pr-4 py-2 text-base font-medium"
+          :class="[
+            $route.path === item.path
+              ? 'bg-blue-50 border-l-4 border-blue-500 text-blue-700'
+              : 'border-l-4 border-transparent text-gray-600 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-800'
+          ]"
+          @click="sidebarOpen = false"
+        >
+          <span class="mr-2">{{ item.icon }}</span>
+          {{ item.name }}
+        </router-link>
+      </div>
+    </div>
 
     <!-- Page Content -->
     <main>

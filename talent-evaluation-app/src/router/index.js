@@ -6,6 +6,7 @@ import { firestoreService } from '@/services/firestoreService'
 import LoginForm from '@/components/auth/LoginForm.vue'
 import RegisterForm from '@/components/auth/RegisterForm.vue'
 import ResetPassword from '@/components/auth/ResetPassword.vue'
+import CreateAdmin from '@/views/CreateAdmin.vue'
 
 // Layout Components
 import DashboardLayout from '@/layouts/DashboardLayout.vue'
@@ -93,6 +94,11 @@ const routes = [
         component: ResetPassword
       }
     ]
+  },
+  {
+    path: '/create-admin',
+    name: 'create-admin',
+    component: CreateAdmin
   },
   {
     path: '/dashboard',

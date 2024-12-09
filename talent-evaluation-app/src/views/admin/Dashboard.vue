@@ -1,10 +1,6 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { firestoreService } from '@/services/firestoreService'
-import { Chart, registerables } from 'chart.js'
-
-// Register Chart.js components
-Chart.register(...registerables)
 
 const loading = ref(true)
 const error = ref(null)
@@ -20,7 +16,7 @@ const loadDashboardData = async () => {
     // Load users and recent activities
     const [usersList, activities] = await Promise.all([
       firestoreService.getAllUsers(),
-      firestoreService.getRecentActivities()
+      firestoreService.getRecentActivities(5) // Get last 5 activities
     ])
     
     users.value = usersList
@@ -38,89 +34,15 @@ const stats = computed(() => {
   const activeUsers = users.value.filter(u => u.status === 'active').length
   const pendingUsers = users.value.filter(u => u.status === 'pending').length
   
-  const roleDistribution = users.value.reduce((acc, user) => {
-    acc[user.role] = (acc[user.role] || 0) + 1
-    return acc
-  }, {})
-  
   return {
     totalUsers,
     activeUsers,
-    pendingUsers,
-    roleDistribution
+    pendingUsers
   }
 })
 
-// Initialize charts
-const initCharts = () => {
-  // Role distribution pie chart
-  const roleCtx = document.getElementById('roleChart')
-  if (roleCtx) {
-    new Chart(roleCtx, {
-      type: 'pie',
-      data: {
-        labels: Object.keys(stats.value.roleDistribution),
-        datasets: [{
-          data: Object.values(stats.value.roleDistribution),
-          backgroundColor: [
-            'rgba(59, 130, 246, 0.8)',
-            'rgba(16, 185, 129, 0.8)',
-            'rgba(245, 158, 11, 0.8)'
-          ]
-        }]
-      },
-      options: {
-        responsive: true,
-        plugins: {
-          legend: {
-            position: 'bottom'
-          }
-        }
-      }
-    })
-  }
-
-  // User status bar chart
-  const statusCtx = document.getElementById('statusChart')
-  if (statusCtx) {
-    new Chart(statusCtx, {
-      type: 'bar',
-      data: {
-        labels: ['Active', 'Pending', 'Inactive'],
-        datasets: [{
-          label: 'Users by Status',
-          data: [
-            stats.value.activeUsers,
-            stats.value.pendingUsers,
-            stats.value.totalUsers - stats.value.activeUsers - stats.value.pendingUsers
-          ],
-          backgroundColor: [
-            'rgba(16, 185, 129, 0.8)',
-            'rgba(245, 158, 11, 0.8)',
-            'rgba(239, 68, 68, 0.8)'
-          ]
-        }]
-      },
-      options: {
-        responsive: true,
-        scales: {
-          y: {
-            beginAtZero: true,
-            ticks: {
-              stepSize: 1
-            }
-          }
-        }
-      }
-    })
-  }
-}
-
-// Load data and initialize charts on mount
-onMounted(async () => {
-  await loadDashboardData()
-  initCharts()
-})
+// Load data on mount
+onMounted(loadDashboardData)
 </script>
 
 <template>
@@ -194,34 +116,38 @@ onMounted(async () => {
         </div>
       </div>
 
-      <!-- Charts Grid -->
-      <div class="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2">
-        <!-- Role Distribution Chart -->
-        <div class="bg-white overflow-hidden shadow rounded-lg">
-          <div class="px-4 py-5 sm:p-6">
-            <h3 class="text-lg font-medium text-gray-900">User Role Distribution</h3>
-            <div class="mt-4 h-64">
-              <canvas id="roleChart"></canvas>
-            </div>
-          </div>
-        </div>
-
-        <!-- Status Distribution Chart -->
-        <div class="bg-white overflow-hidden shadow rounded-lg">
-          <div class="px-4 py-5 sm:p-6">
-            <h3 class="text-lg font-medium text-gray-900">User Status Distribution</h3>
-            <div class="mt-4 h-64">
-              <canvas id="statusChart"></canvas>
-            </div>
+      <!-- Quick Actions -->
+      <div class="mt-8 bg-white shadow sm:rounded-lg">
+        <div class="px-4 py-5 sm:p-6">
+          <h3 class="text-lg leading-6 font-medium text-gray-900">Quick Actions</h3>
+          <div class="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <router-link
+              to="/admin/users"
+              class="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+            >
+              Manage Users
+            </router-link>
+            <router-link
+              to="/admin/assignments"
+              class="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+            >
+              Manage Assignments
+            </router-link>
+            <router-link
+              to="/admin/reports"
+              class="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+            >
+              View Reports
+            </router-link>
           </div>
         </div>
       </div>
 
       <!-- Recent Activities -->
-      <div class="mt-8 bg-white shadow rounded-lg">
+      <div class="mt-8 bg-white shadow sm:rounded-lg">
         <div class="px-4 py-5 sm:p-6">
-          <h3 class="text-lg font-medium text-gray-900">Recent Activities</h3>
-          <div class="mt-4 flow-root">
+          <h3 class="text-lg leading-6 font-medium text-gray-900">Recent Activities</h3>
+          <div class="mt-6 flow-root">
             <ul role="list" class="-mb-8">
               <li v-for="(activity, index) in recentActivities" :key="activity.id">
                 <div class="relative pb-8">
