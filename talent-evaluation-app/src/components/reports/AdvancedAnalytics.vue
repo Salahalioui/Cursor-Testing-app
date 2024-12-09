@@ -28,14 +28,44 @@ ChartJS.register(
   Legend
 )
 
-// Add benchmark constants
-const BENCHMARK_LEVELS = {
-  EXCEEDS: { label: 'Exceeds Expectations', threshold: 0.85, color: 'rgb(34, 197, 94)' },
-  MEETS: { label: 'Meets Expectations', threshold: 0.7, color: 'rgb(59, 130, 246)' },
-  APPROACHING: { label: 'Approaching Expectations', threshold: 0.5, color: 'rgb(234, 179, 8)' },
-  BELOW: { label: 'Below Expectations', threshold: 0, color: 'rgb(239, 68, 68)' }
+// Add benchmark constants with default values
+const DEFAULT_THRESHOLDS = {
+  EXCEEDS: 0.85,
+  MEETS: 0.70,
+  APPROACHING: 0.50
 }
 
+// State for custom thresholds
+const customThresholds = ref({
+  EXCEEDS: DEFAULT_THRESHOLDS.EXCEEDS,
+  MEETS: DEFAULT_THRESHOLDS.MEETS,
+  APPROACHING: DEFAULT_THRESHOLDS.APPROACHING
+})
+
+const BENCHMARK_LEVELS = computed(() => ({
+  EXCEEDS: { 
+    label: 'Exceeds Expectations', 
+    threshold: customThresholds.value.EXCEEDS, 
+    color: 'rgb(34, 197, 94)' 
+  },
+  MEETS: { 
+    label: 'Meets Expectations', 
+    threshold: customThresholds.value.MEETS, 
+    color: 'rgb(59, 130, 246)' 
+  },
+  APPROACHING: { 
+    label: 'Approaching Expectations', 
+    threshold: customThresholds.value.APPROACHING, 
+    color: 'rgb(234, 179, 8)' 
+  },
+  BELOW: { 
+    label: 'Below Expectations', 
+    threshold: 0, 
+    color: 'rgb(239, 68, 68)' 
+  }
+}))
+
+// Add props for prediction settings
 const props = defineProps({
   studentId: {
     type: String,
@@ -48,6 +78,10 @@ const props = defineProps({
   dateRange: {
     type: String,
     default: 'last-6-months'
+  },
+  predictionPeriod: {
+    type: String,
+    default: '3-months'
   }
 })
 
@@ -58,146 +92,118 @@ const performanceData = ref(null)
 const comparativeData = ref(null)
 const skillsData = ref(null)
 const benchmarkStats = ref(null)
+const predictions = ref(null)
+const showPredictions = ref(true)
+const isEditingThresholds = ref(false)
 
-// Computed properties for benchmarking
-const performanceBenchmarks = computed(() => {
-  if (!benchmarkStats.value) return null
+// Function to reset thresholds to defaults
+const resetThresholds = () => {
+  customThresholds.value = { ...DEFAULT_THRESHOLDS }
+}
+
+// Function to save custom thresholds
+const saveThresholds = () => {
+  isEditingThresholds.value = false
+  // Recalculate charts with new thresholds
+  if (performanceData.value) {
+    performanceData.value = processPerformanceData(evaluations.value)
+    comparativeData.value = processComparativeData(evaluations.value, students.value)
+  }
+}
+
+// Store raw data for reprocessing when thresholds change
+const evaluations = ref([])
+const students = ref([])
+
+// Helper function to calculate linear regression
+const calculateLinearRegression = (data) => {
+  const n = data.length
+  if (n < 2) return null
+
+  const xValues = Array.from({ length: n }, (_, i) => i)
+  const yValues = data
+
+  const sumX = xValues.reduce((a, b) => a + b, 0)
+  const sumY = yValues.reduce((a, b) => a + b, 0)
+  const sumXY = xValues.reduce((a, x, i) => a + x * yValues[i], 0)
+  const sumXX = xValues.reduce((a, x) => a + x * x, 0)
+
+  const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX)
+  const intercept = (sumY - slope * sumX) / n
+
+  return { slope, intercept }
+}
+
+// Function to calculate prediction interval
+const calculatePredictionInterval = (regression, data, confidence = 0.95) => {
+  if (!regression || data.length < 2) return null
+
+  const { slope, intercept } = regression
+  const n = data.length
+  const xValues = Array.from({ length: n }, (_, i) => i)
+  
+  // Calculate standard error of regression
+  const yPred = xValues.map(x => slope * x + intercept)
+  const residuals = data.map((y, i) => y - yPred[i])
+  const sumSquaredResiduals = residuals.reduce((a, b) => a + b * b, 0)
+  const standardError = Math.sqrt(sumSquaredResiduals / (n - 2))
+  
+  // t-value for 95% confidence interval with n-2 degrees of freedom
+  const tValue = 1.96 // Approximation for large n
   
   return {
-    exceeds: benchmarkStats.value.average + benchmarkStats.value.standardDev,
-    meets: benchmarkStats.value.average,
-    approaching: benchmarkStats.value.average - benchmarkStats.value.standardDev
-  }
-})
-
-// Enhanced chart options with benchmarks
-const lineChartOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: {
-      position: 'top'
-    },
-    title: {
-      display: true,
-      text: 'Performance Trends Over Time'
-    },
-    tooltip: {
-      callbacks: {
-        afterBody: (context) => {
-          if (!benchmarkStats.value) return ''
-          const value = context[0].parsed.y
-          const benchmark = getBenchmarkLevel(value)
-          return `\nPerformance Level: ${benchmark.label}`
-        }
-      }
-    }
-  },
-  scales: {
-    y: {
-      beginAtZero: true,
-      max: 10
-    }
+    upper: standardError * tValue,
+    lower: -standardError * tValue
   }
 }
 
-const barChartOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: {
-      position: 'top'
-    },
-    title: {
-      display: true,
-      text: 'Comparative Analysis'
-    },
-    tooltip: {
-      callbacks: {
-        afterBody: (context) => {
-          if (!benchmarkStats.value) return ''
-          const value = context[0].parsed.y
-          const benchmark = getBenchmarkLevel(value)
-          return `Performance Level: ${benchmark.label}`
-        }
-      }
-    }
-  },
-  scales: {
-    y: {
-      beginAtZero: true,
-      max: 10
-    }
-  }
-}
-
-const radarChartOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: {
-      position: 'top'
-    },
-    title: {
-      display: true,
-      text: 'Skills Assessment'
-    }
-  },
-  scales: {
-    r: {
-      min: 0,
-      max: 10,
-      beginAtZero: true
-    }
-  }
-}
-
-// Helper function to calculate benchmarks
-const calculateBenchmarks = (evaluations) => {
-  if (!evaluations.length) return null
-
-  const scores = evaluations.map(evaluation => {
-    const values = Object.values(evaluation.scores)
-    return values.reduce((sum, score) => sum + score, 0) / values.length
-  })
-
-  const average = scores.reduce((sum, score) => sum + score, 0) / scores.length
-  const variance = scores.reduce((sum, score) => sum + Math.pow(score - average, 2), 0) / scores.length
-  const standardDev = Math.sqrt(variance)
-
-  return {
-    average,
-    standardDev,
-    min: Math.min(...scores),
-    max: Math.max(...scores)
-  }
-}
-
-// Helper function to determine benchmark level
-const getBenchmarkLevel = (score) => {
-  for (const [level, data] of Object.entries(BENCHMARK_LEVELS)) {
-    if (score >= data.threshold * 10) {
-      return data
-    }
-  }
-  return BENCHMARK_LEVELS.BELOW
-}
-
-// Enhanced data processing functions
+// Enhanced processPerformanceData function with predictions
 const processPerformanceData = (evaluations) => {
   const sortedEvaluations = evaluations
     .sort((a, b) => new Date(a.date) - new Date(b.date))
     .filter(evaluation => props.sportType ? evaluation.sportType === props.sportType : true)
 
   const labels = sortedEvaluations.map(evaluation => new Date(evaluation.date).toLocaleDateString())
-  
-  // Calculate average scores
   const data = sortedEvaluations.map(evaluation => {
     const scores = Object.values(evaluation.scores)
     return scores.reduce((sum, score) => sum + score, 0) / scores.length
   })
 
-  // Add benchmark lines if available
+  // Calculate predictions if we have enough data
+  let predictionData = null
+  if (data.length >= 3 && showPredictions.value) {
+    const regression = calculateLinearRegression(data)
+    if (regression) {
+      const { slope, intercept } = regression
+      const interval = calculatePredictionInterval(regression, data)
+      
+      // Calculate number of future points based on prediction period
+      const futurePeriods = props.predictionPeriod === '3-months' ? 3 : 
+                           props.predictionPeriod === '6-months' ? 6 : 12
+      
+      const lastX = data.length - 1
+      const predictions = Array.from({ length: futurePeriods }, (_, i) => {
+        const x = lastX + i + 1
+        return slope * x + intercept
+      })
+
+      // Generate future dates
+      const lastDate = new Date(sortedEvaluations[sortedEvaluations.length - 1].date)
+      const futureDates = Array.from({ length: futurePeriods }, (_, i) => {
+        const date = new Date(lastDate)
+        date.setMonth(date.getMonth() + i + 1)
+        return date.toLocaleDateString()
+      })
+
+      predictionData = {
+        labels: futureDates,
+        values: predictions,
+        interval: interval
+      }
+    }
+  }
+
+  // Create datasets array
   const datasets = [{
     label: 'Overall Performance',
     data,
@@ -205,34 +211,54 @@ const processPerformanceData = (evaluations) => {
     tension: 0.1
   }]
 
-  if (performanceBenchmarks.value) {
-    // Add benchmark lines
-    datasets.push(
-      {
-        label: 'Exceeds Expectations',
-        data: Array(labels.length).fill(performanceBenchmarks.value.exceeds),
-        borderColor: BENCHMARK_LEVELS.EXCEEDS.color,
-        borderDash: [5, 5],
-        fill: false
-      },
-      {
-        label: 'Meets Expectations',
-        data: Array(labels.length).fill(performanceBenchmarks.value.meets),
-        borderColor: BENCHMARK_LEVELS.MEETS.color,
-        borderDash: [5, 5],
-        fill: false
-      },
-      {
-        label: 'Approaching Expectations',
-        data: Array(labels.length).fill(performanceBenchmarks.value.approaching),
-        borderColor: BENCHMARK_LEVELS.APPROACHING.color,
-        borderDash: [5, 5],
-        fill: false
+  // Add benchmark lines
+  if (benchmarkStats.value) {
+    Object.entries(BENCHMARK_LEVELS.value).forEach(([key, level]) => {
+      if (key !== 'BELOW') {
+        datasets.push({
+          label: level.label,
+          data: Array(labels.length).fill(level.threshold * 10),
+          borderColor: level.color,
+          borderDash: [5, 5],
+          fill: false
+        })
       }
-    )
+    })
   }
 
-  return { labels, datasets }
+  // Add prediction line and confidence interval
+  if (predictionData) {
+    const allLabels = [...labels, ...predictionData.labels]
+    datasets.push({
+      label: 'Predicted Performance',
+      data: [...Array(labels.length).fill(null), ...predictionData.values],
+      borderColor: 'rgb(147, 51, 234)',
+      borderDash: [10, 5],
+      fill: false
+    })
+
+    if (predictionData.interval) {
+      datasets.push({
+        label: 'Prediction Interval',
+        data: [...Array(labels.length).fill(null), 
+               ...predictionData.values.map(v => v + predictionData.interval.upper)],
+        borderColor: 'rgba(147, 51, 234, 0.2)',
+        backgroundColor: 'rgba(147, 51, 234, 0.1)',
+        fill: '+1'
+      }, {
+        label: false,
+        data: [...Array(labels.length).fill(null), 
+               ...predictionData.values.map(v => v + predictionData.interval.lower)],
+        borderColor: 'rgba(147, 51, 234, 0.2)',
+        fill: false
+      })
+    }
+  }
+
+  return { 
+    labels: predictionData ? [...labels, ...predictionData.labels] : labels, 
+    datasets 
+  }
 }
 
 const processComparativeData = (evaluations, allStudents) => {
@@ -354,19 +380,96 @@ onMounted(() => {
 
 <template>
   <div class="space-y-6">
-    <!-- Loading State -->
+    <!-- Loading and Error States -->
     <div v-if="loading" class="text-center py-12">
       <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
       <p class="mt-4 text-gray-600">Loading analytics...</p>
     </div>
 
-    <!-- Error State -->
     <div v-else-if="error" class="bg-red-50 border border-red-200 rounded-lg p-4 text-center text-red-600">
       {{ error }}
     </div>
 
     <!-- Analytics Content -->
     <template v-else>
+      <!-- Settings Panel -->
+      <div class="bg-white rounded-lg shadow p-4">
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="text-lg font-medium text-gray-900">Analytics Settings</h3>
+          <div class="space-x-2">
+            <button
+              @click="showPredictions = !showPredictions"
+              class="px-3 py-1 rounded-md text-sm"
+              :class="showPredictions ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-700'"
+            >
+              {{ showPredictions ? 'Hide Predictions' : 'Show Predictions' }}
+            </button>
+            <button
+              v-if="!isEditingThresholds"
+              @click="isEditingThresholds = true"
+              class="px-3 py-1 bg-blue-100 text-blue-700 rounded-md text-sm"
+            >
+              Edit Thresholds
+            </button>
+          </div>
+        </div>
+
+        <!-- Threshold Editor -->
+        <div v-if="isEditingThresholds" class="bg-gray-50 rounded-lg p-4 mb-4">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div v-for="(threshold, key) in customThresholds" :key="key" class="space-y-2">
+              <label :for="key" class="block text-sm font-medium text-gray-700">
+                {{ key.charAt(0) + key.slice(1).toLowerCase() }} Threshold
+              </label>
+              <input
+                :id="key"
+                type="number"
+                v-model.number="customThresholds[key]"
+                step="0.05"
+                min="0"
+                max="1"
+                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+              />
+            </div>
+          </div>
+          <div class="mt-4 flex justify-end space-x-2">
+            <button
+              @click="resetThresholds"
+              class="px-3 py-1 bg-gray-100 text-gray-700 rounded-md text-sm"
+            >
+              Reset to Defaults
+            </button>
+            <button
+              @click="saveThresholds"
+              class="px-3 py-1 bg-blue-600 text-white rounded-md text-sm"
+            >
+              Save Changes
+            </button>
+          </div>
+        </div>
+
+        <!-- Prediction Settings -->
+        <div v-if="showPredictions" class="bg-purple-50 rounded-lg p-4">
+          <h4 class="text-sm font-medium text-purple-900 mb-2">Prediction Settings</h4>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label for="predictionPeriod" class="block text-sm font-medium text-purple-700">
+                Forecast Period
+              </label>
+              <select
+                id="predictionPeriod"
+                v-model="props.predictionPeriod"
+                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
+              >
+                <option value="3-months">Next 3 Months</option>
+                <option value="6-months">Next 6 Months</option>
+                <option value="12-months">Next 12 Months</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Benchmark Legend -->
       <div v-if="benchmarkStats" class="bg-white rounded-lg shadow p-4">
         <h3 class="text-lg font-medium text-gray-900 mb-4">Performance Benchmarks</h3>
