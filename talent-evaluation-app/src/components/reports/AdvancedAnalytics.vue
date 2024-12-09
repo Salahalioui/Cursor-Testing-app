@@ -28,6 +28,14 @@ ChartJS.register(
   Legend
 )
 
+// Add benchmark constants
+const BENCHMARK_LEVELS = {
+  EXCEEDS: { label: 'Exceeds Expectations', threshold: 0.85, color: 'rgb(34, 197, 94)' },
+  MEETS: { label: 'Meets Expectations', threshold: 0.7, color: 'rgb(59, 130, 246)' },
+  APPROACHING: { label: 'Approaching Expectations', threshold: 0.5, color: 'rgb(234, 179, 8)' },
+  BELOW: { label: 'Below Expectations', threshold: 0, color: 'rgb(239, 68, 68)' }
+}
+
 const props = defineProps({
   studentId: {
     type: String,
@@ -49,8 +57,20 @@ const error = ref(null)
 const performanceData = ref(null)
 const comparativeData = ref(null)
 const skillsData = ref(null)
+const benchmarkStats = ref(null)
 
-// Chart options
+// Computed properties for benchmarking
+const performanceBenchmarks = computed(() => {
+  if (!benchmarkStats.value) return null
+  
+  return {
+    exceeds: benchmarkStats.value.average + benchmarkStats.value.standardDev,
+    meets: benchmarkStats.value.average,
+    approaching: benchmarkStats.value.average - benchmarkStats.value.standardDev
+  }
+})
+
+// Enhanced chart options with benchmarks
 const lineChartOptions = {
   responsive: true,
   maintainAspectRatio: false,
@@ -61,6 +81,22 @@ const lineChartOptions = {
     title: {
       display: true,
       text: 'Performance Trends Over Time'
+    },
+    tooltip: {
+      callbacks: {
+        afterBody: (context) => {
+          if (!benchmarkStats.value) return ''
+          const value = context[0].parsed.y
+          const benchmark = getBenchmarkLevel(value)
+          return `\nPerformance Level: ${benchmark.label}`
+        }
+      }
+    }
+  },
+  scales: {
+    y: {
+      beginAtZero: true,
+      max: 10
     }
   }
 }
@@ -75,6 +111,22 @@ const barChartOptions = {
     title: {
       display: true,
       text: 'Comparative Analysis'
+    },
+    tooltip: {
+      callbacks: {
+        afterBody: (context) => {
+          if (!benchmarkStats.value) return ''
+          const value = context[0].parsed.y
+          const benchmark = getBenchmarkLevel(value)
+          return `Performance Level: ${benchmark.label}`
+        }
+      }
+    }
+  },
+  scales: {
+    y: {
+      beginAtZero: true,
+      max: 10
     }
   }
 }
@@ -100,22 +152,85 @@ const radarChartOptions = {
   }
 }
 
-// Data processing functions
+// Helper function to calculate benchmarks
+const calculateBenchmarks = (evaluations) => {
+  if (!evaluations.length) return null
+
+  const scores = evaluations.map(evaluation => {
+    const values = Object.values(evaluation.scores)
+    return values.reduce((sum, score) => sum + score, 0) / values.length
+  })
+
+  const average = scores.reduce((sum, score) => sum + score, 0) / scores.length
+  const variance = scores.reduce((sum, score) => sum + Math.pow(score - average, 2), 0) / scores.length
+  const standardDev = Math.sqrt(variance)
+
+  return {
+    average,
+    standardDev,
+    min: Math.min(...scores),
+    max: Math.max(...scores)
+  }
+}
+
+// Helper function to determine benchmark level
+const getBenchmarkLevel = (score) => {
+  for (const [level, data] of Object.entries(BENCHMARK_LEVELS)) {
+    if (score >= data.threshold * 10) {
+      return data
+    }
+  }
+  return BENCHMARK_LEVELS.BELOW
+}
+
+// Enhanced data processing functions
 const processPerformanceData = (evaluations) => {
   const sortedEvaluations = evaluations
     .sort((a, b) => new Date(a.date) - new Date(b.date))
     .filter(evaluation => props.sportType ? evaluation.sportType === props.sportType : true)
 
   const labels = sortedEvaluations.map(evaluation => new Date(evaluation.date).toLocaleDateString())
+  
+  // Calculate average scores
+  const data = sortedEvaluations.map(evaluation => {
+    const scores = Object.values(evaluation.scores)
+    return scores.reduce((sum, score) => sum + score, 0) / scores.length
+  })
+
+  // Add benchmark lines if available
   const datasets = [{
     label: 'Overall Performance',
-    data: sortedEvaluations.map(evaluation => {
-      const scores = Object.values(evaluation.scores)
-      return scores.reduce((sum, score) => sum + score, 0) / scores.length
-    }),
+    data,
     borderColor: 'rgb(75, 192, 192)',
     tension: 0.1
   }]
+
+  if (performanceBenchmarks.value) {
+    // Add benchmark lines
+    datasets.push(
+      {
+        label: 'Exceeds Expectations',
+        data: Array(labels.length).fill(performanceBenchmarks.value.exceeds),
+        borderColor: BENCHMARK_LEVELS.EXCEEDS.color,
+        borderDash: [5, 5],
+        fill: false
+      },
+      {
+        label: 'Meets Expectations',
+        data: Array(labels.length).fill(performanceBenchmarks.value.meets),
+        borderColor: BENCHMARK_LEVELS.MEETS.color,
+        borderDash: [5, 5],
+        fill: false
+      },
+      {
+        label: 'Approaching Expectations',
+        data: Array(labels.length).fill(performanceBenchmarks.value.approaching),
+        borderColor: BENCHMARK_LEVELS.APPROACHING.color,
+        borderDash: [5, 5],
+        fill: false
+      }
+    )
+  }
 
   return { labels, datasets }
 }
@@ -138,12 +253,17 @@ const processComparativeData = (evaluations, allStudents) => {
     return student ? student.name : 'Unknown'
   })
 
+  const data = Array.from(averageScores.values()).map(scores => 
+    scores.reduce((sum, score) => sum + score, 0) / scores.length
+  )
+
+  // Add colors based on benchmark levels
+  const backgroundColor = data.map(score => getBenchmarkLevel(score).color)
+
   const datasets = [{
     label: 'Average Performance',
-    data: Array.from(averageScores.values()).map(scores => 
-      scores.reduce((sum, score) => sum + score, 0) / scores.length
-    ),
-    backgroundColor: 'rgba(75, 192, 192, 0.5)'
+    data,
+    backgroundColor
   }]
 
   return { labels, datasets }
@@ -171,7 +291,7 @@ const processSkillsData = (evaluations) => {
   return { labels, datasets }
 }
 
-// Load data
+// Enhanced loadAnalyticsData function
 const loadAnalyticsData = async () => {
   loading.value = true
   error.value = null
@@ -181,10 +301,8 @@ const loadAnalyticsData = async () => {
     let evaluations = []
 
     if (props.studentId) {
-      // Load single student data
       evaluations = await getStudentEvaluations(props.studentId)
     } else {
-      // Load all students' data
       const promises = allStudents.map(student => getStudentEvaluations(student.id))
       const results = await Promise.all(promises)
       evaluations = results.flat()
@@ -203,10 +321,13 @@ const loadAnalyticsData = async () => {
         cutoffDate.setFullYear(cutoffDate.getFullYear() - 1)
         break
       default:
-        cutoffDate.setFullYear(0) // All time
+        cutoffDate.setFullYear(0)
     }
 
     evaluations = evaluations.filter(evaluation => new Date(evaluation.date) >= cutoffDate)
+
+    // Calculate benchmarks first
+    benchmarkStats.value = calculateBenchmarks(evaluations)
 
     // Process data for different charts
     performanceData.value = processPerformanceData(evaluations)
@@ -246,6 +367,22 @@ onMounted(() => {
 
     <!-- Analytics Content -->
     <template v-else>
+      <!-- Benchmark Legend -->
+      <div v-if="benchmarkStats" class="bg-white rounded-lg shadow p-4">
+        <h3 class="text-lg font-medium text-gray-900 mb-4">Performance Benchmarks</h3>
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div v-for="(level, key) in BENCHMARK_LEVELS" :key="key" 
+               class="flex items-center space-x-2 p-2 rounded-lg"
+               :style="{ backgroundColor: level.color + '20' }">
+            <div class="w-4 h-4 rounded-full" :style="{ backgroundColor: level.color }"></div>
+            <div>
+              <div class="font-medium" :style="{ color: level.color }">{{ level.label }}</div>
+              <div class="text-sm text-gray-600">{{ (level.threshold * 10).toFixed(1) }}+ points</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Performance Trends -->
       <div class="bg-white rounded-lg shadow p-4">
         <h3 class="text-lg font-medium text-gray-900 mb-4">Performance Trends</h3>
@@ -261,6 +398,18 @@ onMounted(() => {
       <!-- Comparative Analysis -->
       <div class="bg-white rounded-lg shadow p-4">
         <h3 class="text-lg font-medium text-gray-900 mb-4">Comparative Analysis</h3>
+        <div v-if="benchmarkStats" class="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="bg-gray-50 rounded-lg p-3">
+            <div class="text-sm text-gray-600">Average Score</div>
+            <div class="text-2xl font-semibold">{{ benchmarkStats.average.toFixed(1) }}</div>
+          </div>
+          <div class="bg-gray-50 rounded-lg p-3">
+            <div class="text-sm text-gray-600">Score Range</div>
+            <div class="text-2xl font-semibold">
+              {{ benchmarkStats.min.toFixed(1) }} - {{ benchmarkStats.max.toFixed(1) }}
+            </div>
+          </div>
+        </div>
         <div class="h-80">
           <Bar
             v-if="comparativeData"
