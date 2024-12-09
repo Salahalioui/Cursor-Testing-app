@@ -32,6 +32,12 @@ async function requireAuth(to, from, next) {
       return
     }
 
+    // Redirect admin users to admin dashboard
+    if (userProfile.role === 'ADMIN' && to.name === 'dashboard') {
+      next({ name: 'admin-dashboard' })
+      return
+    }
+
     next()
   } catch (error) {
     console.error('Auth guard error:', error)
@@ -108,7 +114,7 @@ const routes = [
       {
         path: '',
         name: 'dashboard',
-        component: () => import('@/views/Dashboard.vue')
+        component: () => import('@/views/user/Dashboard.vue')
       },
       {
         path: 'profile',
@@ -139,6 +145,10 @@ const routes = [
     children: [
       {
         path: '',
+        redirect: { name: 'admin-dashboard' }
+      },
+      {
+        path: 'dashboard',
         name: 'admin-dashboard',
         component: () => import('@/views/admin/Dashboard.vue')
       },
