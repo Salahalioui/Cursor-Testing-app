@@ -8,21 +8,22 @@ import {
   sendEmailVerification,
   onAuthStateChanged
 } from 'firebase/auth'
+import { getFirestore } from 'firebase/firestore'
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
-  // TODO: Replace with your Firebase config
-  apiKey: "YOUR_API_KEY",
-  authDomain: "your-app.firebaseapp.com",
-  projectId: "your-app",
-  storageBucket: "your-app.appspot.com",
-  messagingSenderId: "your-messaging-sender-id",
-  appId: "your-app-id"
+  apiKey: "AIzaSyCR9uLboAOByyzfuJ64HDJ71OxyeE-6lKc",
+  authDomain: "talent-evaluation-app.firebaseapp.com",
+  projectId: "talent-evaluation-app",
+  storageBucket: "talent-evaluation-app.firebasestorage.app",
+  messagingSenderId: "366370273436",
+  appId: "1:366370273436:web:6a450cb4aa74e34b1e9559"
 }
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig)
 const auth = getAuth(app)
+export const db = getFirestore(app)
 
 // Authentication service
 export const authService = {
