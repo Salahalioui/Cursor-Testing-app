@@ -1,3 +1,5 @@
+import forms from '@tailwindcss/forms'
+
 /** @type {import('tailwindcss').Config} */
 export default {
   content: [
@@ -7,9 +9,6 @@ export default {
   theme: {
     extend: {},
   },
-  plugins: [
-    // Using dynamic import for the forms plugin
-    (await import('@tailwindcss/forms')).default(),
-  ],
+  plugins: [forms],
 }
 
