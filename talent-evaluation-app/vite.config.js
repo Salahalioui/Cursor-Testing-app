@@ -14,6 +14,17 @@ export default defineConfig({
     outDir: 'dist',
     assetsDir: 'assets',
     sourcemap: true,
+    rollupOptions: {
+      external: ['jspdf'],
+      output: {
+        globals: {
+          jspdf: 'jspdf'
+        }
+      }
+    },
+    optimizeDeps: {
+      include: ['jspdf']
+    }
   },
   server: {
     port: 3000,
