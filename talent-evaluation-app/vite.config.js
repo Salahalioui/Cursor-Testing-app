@@ -15,16 +15,17 @@ export default defineConfig({
     assetsDir: 'assets',
     sourcemap: true,
     rollupOptions: {
-      external: ['jspdf'],
       output: {
-        globals: {
-          jspdf: 'jspdf'
+        manualChunks: {
+          'vendor': ['vue', 'vue-router', 'chart.js', 'vue-chartjs'],
+          'pdf': ['jspdf'],
+          'excel': ['xlsx']
         }
       }
-    },
-    optimizeDeps: {
-      include: ['jspdf']
     }
+  },
+  optimizeDeps: {
+    include: ['jspdf', 'xlsx', 'chart.js', 'vue-chartjs']
   },
   server: {
     port: 3000,

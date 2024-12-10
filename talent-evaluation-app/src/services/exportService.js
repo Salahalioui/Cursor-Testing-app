@@ -1,4 +1,4 @@
-import { jsPDF } from 'jspdf'
+import jsPDF from 'jspdf'
 import * as XLSX from 'xlsx'
 
 // Helper function to format date
