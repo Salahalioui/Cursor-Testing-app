@@ -8,7 +8,8 @@ export default {
     extend: {},
   },
   plugins: [
-    require('@tailwindcss/forms'),
+    // Using dynamic import for the forms plugin
+    (await import('@tailwindcss/forms')).default(),
   ],
 }
 
