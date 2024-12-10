@@ -1,4 +1,3 @@
-import jsPDF from 'jspdf'
 import * as XLSX from 'xlsx'
 
 // Helper function to format date
@@ -12,7 +11,9 @@ const calculateAverage = (scores) => {
   return (total / Object.values(scores).length).toFixed(2)
 }
 
-export const exportToPDF = (data, type = 'student') => {
+export const exportToPDF = async (data, type = 'student') => {
+  // Dynamically import jspdf
+  const jsPDF = (await import('jspdf')).default
   const doc = new jsPDF()
   const pageWidth = doc.internal.pageSize.width
   let yPos = 20

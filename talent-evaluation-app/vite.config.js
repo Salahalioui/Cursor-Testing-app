@@ -16,16 +16,22 @@ export default defineConfig({
     sourcemap: true,
     rollupOptions: {
       output: {
-        manualChunks: {
-          'vendor': ['vue', 'vue-router', 'chart.js', 'vue-chartjs'],
-          'pdf': ['jspdf'],
-          'excel': ['xlsx']
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('jspdf')) return 'jspdf'
+            if (id.includes('xlsx')) return 'xlsx'
+            if (id.includes('chart.js') || id.includes('vue-chartjs')) return 'charts'
+            return 'vendor'
+          }
         }
       }
     }
   },
   optimizeDeps: {
-    include: ['jspdf', 'xlsx', 'chart.js', 'vue-chartjs']
+    include: ['jspdf', 'xlsx', 'chart.js', 'vue-chartjs'],
+    esbuildOptions: {
+      target: 'es2020'
+    }
   },
   server: {
     port: 3000,
